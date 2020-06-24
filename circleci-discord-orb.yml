@@ -168,7 +168,7 @@ commands:
                               <</ parameters.include_job_number_field >> 
                               <<# parameters.include_visit_job_action >>
                               { \
-                                \"title\": \"URL\", \
+                                \"name\": \"URL\", \
                                 \"value\": \"[Visit Job]($CIRCLE_BUILD_URL)\" \
                               } \
                               <</ parameters.include_visit_job_action >>
@@ -194,21 +194,21 @@ commands:
                             \"fields\": [ \
                               <<# parameters.include_project_field >>
                               { \
-                                \"title\": \"Project\", \
+                                \"name\": \"Project\", \
                                 \"value\": \"$CIRCLE_PROJECT_REPONAME\", \
                                 \"inline\": true \
                               }, \
                               <</ parameters.include_project_field >>
                               <<# parameters.include_job_number_field >>
                               { \
-                                \"title\": \"Job Number\", \
+                                \"name\": \"Job Number\", \
                                 \"value\": \"$CIRCLE_BUILD_NUM\", \
                                 \"inline\": true \
                               }, \
                               <</ parameters.include_job_number_field >>
                               <<# parameters.include_visit_job_action >>
                               { \
-                                \"title\": \"URL\", \
+                                \"name\": \"URL\", \
                                 \"value\": \"[Visit Job]($CIRCLE_BUILD_URL)\" \
                               } \
                               <</ parameters.include_visit_job_action >>
@@ -224,3 +224,15 @@ commands:
             else
               echo "Current branch is not included in only_for_branches filter; no status alert will be sent"
             fi
+
+example:
+  status:
+    description: Send a CircleCI job status.
+    usage:
+      version: 2.1
+      orbs:
+        discord: antonioned/discord@0.0.2
+      jobs:
+        tests:
+          steps:
+            - discord/status
