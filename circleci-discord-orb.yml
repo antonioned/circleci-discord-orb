@@ -1,0 +1,226 @@
+# This code is licensed from CircleCI to the user under the MIT license. See
+# https://circleci.com/orbs/registry/licensing for details.
+version: 2.1
+
+description: |
+   Create and send custom notifications and messages to Discord for CircleCI job statuses. This orb uses the certified slack orb as a base with commands changed for usage in Discord. View the orb's source: https://github.com/antonioned/circleci-discord-orb 
+display:
+  source_url: https://github.com/antonioned/circleci-discord-orb
+
+commands:
+  status:
+    description: >
+      Send a status alert at the end of a job based on success or failure.
+      Must be the last step in a job.
+    parameters:
+      webhook:
+        type: string
+        default: ${DISCORD_WEBHOOK}
+        description: >
+          Enter either your Webhook value or use the CircleCI UI to add your
+          token under the 'DISCORD_WEBHOOK' env var
+
+      success_message:
+        type: string
+        default: ":tada: A $CIRCLE_JOB job has succeeded!"
+        description: Enter custom message.
+
+      failure_message:
+        type: string
+        default: ":red_circle: A $CIRCLE_JOB job has failed!"
+        description: Enter custom message.
+
+      success_only:
+        type: boolean
+        default: false
+        description: >
+          If `true`, notifications of failed jobs will not be sent.
+
+      fail_only:
+        type: boolean
+        default: false
+        description: >
+          If `true`, notifications of successful jobs will not be sent.
+          
+      mentions:
+        type: string
+        default: ""
+        description: >
+          A comma separated list of user IDs. No spaces.
+          
+      only_for_branches:
+        type: string
+        default: ""
+        description: >
+          If set, a comma-separated list of branches for which to send
+          notifications. No spaces.
+
+      include_project_field:
+        type: boolean
+        default: true
+        description: >
+          Whether or not to include the Project field in the message
+
+      include_job_number_field:
+        type: boolean
+        default: true
+        description: >
+          Whether or not to include the Job Number field in the message
+
+      include_visit_job_action:
+        type: boolean
+        default: true
+        description: >
+          Whether or not to include the Visit Job action in the message
+
+      channel:
+        type: string
+        default: ""
+        description: >
+          ID of channel if set, overrides webhook's default channel setting
+
+    steps:
+      - run:
+          name: Provide error if curl is not installed.
+          command: |
+            which curl > curl_exists; echo $? | grep -q '1' && echo curl not installed && rm curl_exists && exit 1
+            rm curl_exists
+      - run:
+          name: Discord - Setting Failure Condition
+          command: |
+            echo 'export DISCORD_BUILD_STATUS="fail"' >> $BASH_ENV
+          when: on_fail
+
+      - run:
+          name: Discord - Setting Success Condition
+          command: |
+            echo 'export DISCORD_BUILD_STATUS="success"' >> $BASH_ENV
+          when: on_success
+
+      - run:
+          name: Provide error if non-bash shell
+          command: |
+            if [ ! -x /bin/bash ]; then
+              echo Bash not installed.
+              exit 1
+            fi
+      - run:
+          name: Discord - Sending Status Alert
+          shell: /bin/bash
+          when: always
+          command: |
+            current_branch_in_filter=false
+
+            IFS="," read -ra BRANCH_FILTERS \<<< "<< parameters.only_for_branches >>"
+
+            for i in "${BRANCH_FILTERS[@]}"; do
+              if [ "${i}" == "${CIRCLE_BRANCH}" ]; then
+                current_branch_in_filter=true
+              fi
+            done
+
+            if [ "x" == "x<< parameters.only_for_branches>>" ] || [ "$current_branch_in_filter" = true ]; then
+              # Provide error if no webhook is set and error. Otherwise continue
+              if [ -z "<< parameters.webhook >>" ]; then
+                echo "NO DISCORD WEBHOOK SET"
+                echo "Please input your DISCORD_WEBHOOK value either in the settings for this project, or as a parameter for this orb."
+                exit 1
+              else
+                #Create Members string
+                if [ -n "<< parameters.mentions >>" ]; then
+                  IFS="," read -ra DISCORD_MEMBERS \<<< "<< parameters.mentions >>"
+                  for i in "${DISCORD_MEMBERS[@]}"; do
+                    if [ $(echo ${i} | head -c 1) == "S" ]; then
+                      DISCORD_MENTIONS="${DISCORD_MENTIONS}<!subteam^${i}> "
+                    elif echo ${i} | grep -E "^(here|channel|everyone)$" > /dev/null; then
+                      DISCORD_MENTIONS="${DISCORD_MENTIONS}<!${i}> "
+                    else
+                      DISCORD_MENTIONS="${DISCORD_MENTIONS}<@${i}> "
+                    fi
+                  done
+                fi
+                #If successful
+                if [ "$DISCORD_BUILD_STATUS" = "success" ]; then
+                  #Skip if fail_only
+                  if [ << parameters.fail_only >> = true ]; then
+                    echo "The job completed successfully"
+                    echo '"fail_only" is set to "true". No Discord notification sent.'
+                  else
+                    curl -H 'Content-Type: application/json' \
+                      -d "{ \
+                        \"embeds\": [ \
+                          { \
+                            \"description\": \"<< parameters.success_message >> $DISCORD_MENTIONS\", \
+                            \"fields\": [ \
+                              <<# parameters.include_project_field >>
+                              { \
+                                \"name\": \"Project\", \
+                                \"value\": \"$CIRCLE_PROJECT_REPONAME\", \
+                                \"inline\": true \
+                              }, \
+                              <</ parameters.include_project_field >>
+                              <<# parameters.include_job_number_field >>
+                              { \
+                                \"name\": \"Job Number\", \
+                                \"value\": \"$CIRCLE_BUILD_NUM\", \
+                                \"inline\": true \
+                              }, \
+                              <</ parameters.include_job_number_field >> 
+                              <<# parameters.include_visit_job_action >>
+                              { \
+                                \"title\": \"URL\", \
+                                \"value\": \"[Visit Job]($CIRCLE_BUILD_URL)\" \
+                              } \
+                              <</ parameters.include_visit_job_action >>
+                            ], \
+                            \"color\": \"3394662\" \
+                          } \
+                        ] \
+                      } " << parameters.webhook >>
+                    echo "Job completed successfully. Alert sent."
+                  fi
+                else
+                  #If Failed
+                  #Skip if success_only
+                  if [ << parameters.success_only >> = true ]; then
+                    echo "The job failed"
+                    echo '"success_only" is set to "true". No Discord notification sent.'
+                  else
+                    curl -H 'Content-type: application/json' \
+                      -d "{ \
+                        \"embeds\": [ \
+                          { \
+                            \"description\": \"<< parameters.failure_message >> $DISCORD_MENTIONS\", \
+                            \"fields\": [ \
+                              <<# parameters.include_project_field >>
+                              { \
+                                \"title\": \"Project\", \
+                                \"value\": \"$CIRCLE_PROJECT_REPONAME\", \
+                                \"inline\": true \
+                              }, \
+                              <</ parameters.include_project_field >>
+                              <<# parameters.include_job_number_field >>
+                              { \
+                                \"title\": \"Job Number\", \
+                                \"value\": \"$CIRCLE_BUILD_NUM\", \
+                                \"inline\": true \
+                              }, \
+                              <</ parameters.include_job_number_field >>
+                              <<# parameters.include_visit_job_action >>
+                              { \
+                                \"title\": \"URL\", \
+                                \"value\": \"[Visit Job]($CIRCLE_BUILD_URL)\" \
+                              } \
+                              <</ parameters.include_visit_job_action >>
+                            ], \
+                            \"color\": \"15555676\" \
+                          } \
+                        ] \
+                      } " << parameters.webhook >>
+                    echo "Job failed. Alert sent."
+                  fi
+                fi
+              fi
+            else
+              echo "Current branch is not included in only_for_branches filter; no status alert will be sent"
+            fi
