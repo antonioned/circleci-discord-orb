@@ -15,7 +15,7 @@ commands:
     parameters:
       webhook:
         type: string
-        default: ${DISCORD_WEBHOOK}
+        default: ${DISCORD_WEBHOOK_URL}
         description: >
           Enter either your Webhook value or use the CircleCI UI to add your
           token under the 'DISCORD_WEBHOOK' env var
@@ -54,24 +54,6 @@ commands:
         description: >
           If set, a comma-separated list of branches for which to send
           notifications. No spaces.
-
-      include_project_field:
-        type: boolean
-        default: true
-        description: >
-          Whether or not to include the Project field in the message
-
-      include_job_number_field:
-        type: boolean
-        default: true
-        description: >
-          Whether or not to include the Job Number field in the message
-
-      include_visit_job_action:
-        type: boolean
-        default: true
-        description: >
-          Whether or not to include the Visit Job action in the message
 
       channel:
         type: string
@@ -146,36 +128,30 @@ commands:
                     echo "The job completed successfully"
                     echo '"fail_only" is set to "true". No Discord notification sent.'
                   else
-                    curl -H 'Content-Type: application/json' \
+                    curl -H 'Content-Type: application/json' -X POST \
                       -d "{ \
                         \"embeds\": [ \
-                          { \
-                            \"description\": \"<< parameters.success_message >> $DISCORD_MENTIONS\", \
-                            \"fields\": [ \
-                              <<# parameters.include_project_field >>
-                              { \
-                                \"name\": \"Project\", \
-                                \"value\": \"$CIRCLE_PROJECT_REPONAME\", \
-                                \"inline\": true \
-                              }, \
-                              <</ parameters.include_project_field >>
-                              <<# parameters.include_job_number_field >>
-                              { \
-                                \"name\": \"Job Number\", \
-                                \"value\": \"$CIRCLE_BUILD_NUM\", \
-                                \"inline\": true \
-                              }, \
-                              <</ parameters.include_job_number_field >> 
-                              <<# parameters.include_visit_job_action >>
-                              { \
-                                \"name\": \"URL\", \
-                                \"value\": \"[Visit Job]($CIRCLE_BUILD_URL)\" \
-                              } \
-                              <</ parameters.include_visit_job_action >>
-                            ], \
-                            \"color\": \"3394662\" \
-                          } \
-                        ] \
+                            { \
+                                \"description\": \"<< parameters.success_message >>\", \
+                                \"color\": 3394662, \
+                                \"fields\": [ \
+                                    { \
+                                        \"name\": \"Project\", \
+                                        \"value\": \"$CIRCLE_PROJECT_REPONAME\", \
+                                        \"inline\": true \
+                                    }, \
+                                    { \
+                                        \"name\": \"Job Number\", \
+                                        \"value\": \"$CIRCLE_BUILD_NUM\", \
+                                        \"inline\": true \
+                                    }, \
+                                    { \
+                                        \"name\": \"URL\", \
+                                        \"value\": \"[Visit Job]($CIRCLE_BUILD_URL)\" \
+                                    } \
+                                  ] \
+                            } \
+                          ] \
                       } " << parameters.webhook >>
                     echo "Job completed successfully. Alert sent."
                   fi
@@ -186,37 +162,31 @@ commands:
                     echo "The job failed"
                     echo '"success_only" is set to "true". No Discord notification sent.'
                   else
-                    curl -H 'Content-type: application/json' \
-                      -d "{ \
+                    curl -H "Content-Type: application/json" -X POST -d \
+                    "{ \
                         \"embeds\": [ \
-                          { \
-                            \"description\": \"<< parameters.failure_message >> $DISCORD_MENTIONS\", \
-                            \"fields\": [ \
-                              <<# parameters.include_project_field >>
-                              { \
-                                \"name\": \"Project\", \
-                                \"value\": \"$CIRCLE_PROJECT_REPONAME\", \
-                                \"inline\": true \
-                              }, \
-                              <</ parameters.include_project_field >>
-                              <<# parameters.include_job_number_field >>
-                              { \
-                                \"name\": \"Job Number\", \
-                                \"value\": \"$CIRCLE_BUILD_NUM\", \
-                                \"inline\": true \
-                              }, \
-                              <</ parameters.include_job_number_field >>
-                              <<# parameters.include_visit_job_action >>
-                              { \
-                                \"name\": \"URL\", \
-                                \"value\": \"[Visit Job]($CIRCLE_BUILD_URL)\" \
-                              } \
-                              <</ parameters.include_visit_job_action >>
-                            ], \
-                            \"color\": \"15555676\" \
-                          } \
-                        ] \
-                      } " << parameters.webhook >>
+                            { \
+                                \"description\": \"<< parameters.failure_message >>\", \
+                                \"color\": 15555676, \
+                                \"fields\": [ \
+                                    { \
+                                        \"name\": \"Project\", \
+                                        \"value\": \"$CIRCLE_PROJECT_REPONAME\", \
+                                        \"inline\": true \
+                                    }, \
+                                    { \
+                                        \"name\": \"Job Number\", \
+                                        \"value\": \"$CIRCLE_BUILD_NUM\", \
+                                        \"inline\": true \
+                                    }, \
+                                    { \
+                                        \"name\": \"URL\", \
+                                        \"value\": \"[Visit Job]($CIRCLE_BUILD_URL)\" \
+                                    } \
+                                  ] \
+                            } \
+                          ] \
+                      }" << parameters.webhook >>
                     echo "Job failed. Alert sent."
                   fi
                 fi
@@ -231,7 +201,7 @@ example:
     usage:
       version: 2.1
       orbs:
-        discord: antonioned/discord@0.0.2
+        discord: antonioned/discord@0.0.4
       jobs:
         tests:
           steps:
